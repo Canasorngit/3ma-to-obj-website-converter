@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>3MA to OBJ Converter</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 40px;
+    }
+    #drop-area {
+      border: 2px dashed #aaa;
+      padding: 40px;
+      border-radius: 10px;
+      background: #f9f9f9;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    #drop-area.hover {
+      border-color: #333;
+      background-color: #eef;
+    }
+    #convert-btn, #download-btn > button {
+      margin: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    input[type="file"] {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>3MA to OBJ Converter</h1>
+
+  <div id="drop-area">
+    <p id="file-label">Drop .3ma/.json file here or click to select</p>
+    <input type="file" id="fileElem">
+  </div>
+
+  <button id="convert-btn" disabled>Convert to OBJ</button>
+  <a id="download-btn" style="display:none;" download="converted.obj">
+    <button>Download OBJ</button>
+  </a>
+
+  <script>
+    const dropArea = document.getElementById("drop-area");
+    const fileInput = document.getElementById("fileElem");
+    const convertBtn = document.getElementById("convert-btn");
+    const downloadBtn = document.getElementById("download-btn");
+    const fileLabel = document.getElementById("file-label");
+
+    let fileData = null;
+    let objContent = "";
+
+    // Handle drag & drop
+    ["dragenter", "dragover"].forEach(eventName => {
+      dropArea.addEventListener(eventName, e => {
+        e.preventDefault();
+        dropArea.classList.add("hover");
+      }, false);
+    });
+
+    ["dragleave", "drop"].forEach(eventName => {
+      dropArea.addEventListener(eventName, e => {
+        e.preventDefault();
+        dropArea.classList.remove("hover");
+      }, false);
+    });
+
+    dropArea.addEventListener("drop", (e) => {
+      const files = e.dataTransfer.files;
+      handleFiles(files);
+    });
+
+    // Make drop area clickable
+    dropArea.addEventListener("click", () => {
+      fileInput.click();
+    });
+
+    // File input change
+    fileInput.addEventListener("change", () => {
+      handleFiles(fileInput.files);
+    });
+
+    // File check and parsing
+    function handleFiles(files) {
+      const file = files[0];
+      if (!file) return;
+
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (ext !== "3ma" && ext !== "json") {
+        alert("Only .3ma or .json files allowed.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          fileData = JSON.parse(e.target.result);
+          convertBtn.disabled = false;
+          fileLabel.textContent = `Loaded: ${file.name}`;
+        } catch (err) {
+          alert("Invalid JSON content in file.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Convert logic
+    convertBtn.addEventListener("click", () => {
+      if (!fileData) return;
+
+      let meshes = fileData.meshes;
+      let vertex_index = 0;
+      let forward = 0;
+      let obj = "";
+
+      for (let msh = 0; msh < meshes.length; msh++) {
+        obj += "\ng \n";
+        const preciseFactor = meshes[msh].preciseFactor;
+        const positions = meshes[msh]._positions;
+        const prev_vertex_index = vertex_index;
+
+        for (let vtx = 0; vtx < positions.length; vtx += 3) {
+          const x = positions[vtx] / preciseFactor;
+          const y = positions[vtx + 1] / preciseFactor;
+          const z = (positions[vtx + 2] * -1) / preciseFactor;
+          obj += `v ${x} ${y} ${z}\n`;
+          vertex_index++;
+        }
+
+        if (msh > 0) forward = 1;
+
+        const faces = meshes[msh].facesUnivertsList;
+        obj += `\ng name${msh} \n`;
+        for (let face of faces) {
+          obj += "f";
+          for (let idx of face.u) {
+            obj += ` ${idx + 1 + (forward * prev_vertex_index)}`;
+          }
+          obj += "\n";
+        }
+      }
+
+      const blob = new Blob([obj], { type: "text/plain" });
+      downloadBtn.href = URL.createObjectURL(blob);
+      downloadBtn.style.display = "inline";
+    });
+  </script>
+
+</body>
+</html>
